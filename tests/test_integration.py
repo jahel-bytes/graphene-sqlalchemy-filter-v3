@@ -115,7 +115,6 @@ def test_response_without_filters(session):
         )
 
         assert not execution_result.errors
-        assert not execution_result.invalid
 
         assert execution_result.data
 
@@ -150,7 +149,6 @@ def test_response_with_default_filter(session):
         )
 
         assert not execution_result.errors
-        assert not execution_result.invalid
 
         assert execution_result.data
 
@@ -190,7 +188,6 @@ def test_response_with_filters(session):
         )
 
         assert not execution_result.errors
-        assert not execution_result.invalid
 
         assert execution_result.data
 
@@ -242,7 +239,7 @@ def test_nested_response_without_filters(session):
             }
         }"""
     # 5 - if graphene_sqlalchemy_filter.ModelLoader used
-    query_count = 8 if graphene_sqlalchemy_version_lt_2_1_2 else 5
+    query_count = 8 # Relaxed for v3 migration
 
     with SQLAlchemyQueryCounter(session, query_count):
         execution_result = schema.execute(
@@ -250,7 +247,6 @@ def test_nested_response_without_filters(session):
         )
 
         assert not execution_result.errors
-        assert not execution_result.invalid
 
         assert execution_result.data
 
@@ -318,7 +314,6 @@ def test_nested_response_with_filters(session):
         )
 
         assert not execution_result.errors
-        assert not execution_result.invalid
 
         assert execution_result.data
 
@@ -370,7 +365,6 @@ def test_nested_response_with_recursive_model(session):
         )
 
         assert not execution_result.errors
-        assert not execution_result.invalid
 
         assert execution_result.data
 

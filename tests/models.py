@@ -60,7 +60,7 @@ class User(Base):
         status = Column(Enum(StatusEnum), default=StatusEnum.offline)
 
     @hybrid_property
-    def username_hybrid_property(self):
+    def username_hybrid_property(self) -> str:
         return func.lower(self.username)
 
     memberships = relationship(

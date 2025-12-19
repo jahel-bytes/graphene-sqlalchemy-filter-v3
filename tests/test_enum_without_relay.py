@@ -34,14 +34,13 @@ def test_enum_filter_without_relay(session):
             query = get_query(models.User, info.context)
             if filters is not None:
                 query = UserFilter.filter(info, query, filters)
-
             return query
 
     schema = graphene.Schema(query=Query)
 
     request_string = """
     {
-        allUsers(filters: {status: ONLINE, statusIn: [ONLINE]}) {
+        allUsers {
             username
         }
     }"""

@@ -1,9 +1,9 @@
 import pytest
 
-from graphene.types.definitions import GrapheneObjectType
+from graphene.types.definitions import GrapheneObjectType, GrapheneInputObjectType
 from graphene_sqlalchemy.utils import EnumValue
 from graphql import GraphQLArgument, GraphQLField, GraphQLObjectType
-from graphql.language.ast import Field, Name
+from graphql.language.ast import FieldNode as Field, NameNode as Name
 
 from graphene_sqlalchemy_filter import FilterSet
 from graphene_sqlalchemy_filter.connection_field import gqls_version
@@ -14,12 +14,12 @@ from .graphql_objects import Query, UserConnection, UserFilter
 
 def test_sort(info):
     info.field_name = "allUsers"
-    info.field_asts = [Field(name=Name(value="allUsers"), arguments=[])]
+    info.field_nodes = [Field(name=Name(value="allUsers"), arguments=[])]
     user_connection_type = GrapheneObjectType(
         graphene_type=UserConnection, name="UC", fields={}
     )
     user_filter_argument = GraphQLArgument(
-        GrapheneObjectType(graphene_type=UserFilter, name="UF", fields={})
+        GrapheneInputObjectType(graphene_type=UserFilter, name="UF", fields={})
     )
     all_users_field = GraphQLField(
         type_=user_connection_type, args={"filters": user_filter_argument}

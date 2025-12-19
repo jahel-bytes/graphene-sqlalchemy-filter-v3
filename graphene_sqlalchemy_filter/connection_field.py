@@ -16,15 +16,15 @@ from sqlalchemy.orm import (
 )
 
 import graphene_sqlalchemy
+from graphene_sqlalchemy.utils import EnumValue
 from graphene.utils.str_converters import to_snake_case
-from promise import Promise, dataloader
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from graphene.relay import Connection
-    from graphql import ResolveInfo
+    from graphql import GraphQLResolveInfo as ResolveInfo
 
     from .filters import FilterSet
 
@@ -106,14 +106,14 @@ class FilterableConnectionField(graphene_sqlalchemy.SQLAlchemyConnectionField):
             FilterSet class from field args.
 
         """
-        field_name = info.field_asts[0].name.value
+        field_name = info.field_nodes[0].name.value
         schema_field = info.parent_type.fields.get(field_name)
         filters_type = schema_field.args[cls.filter_arg].type
         filters: FilterSet = filters_type.graphene_type
         return filters
 
 
-class ModelLoader(dataloader.DataLoader):
+class ModelLoader:
     filter_arg: str = DEFAULT_FILTER_ARG
 
     def __init__(
@@ -132,7 +132,6 @@ class ModelLoader(dataloader.DataLoader):
             graphql_args: Request args: filters, sort, ...
 
         """
-        super().__init__()
         self.info: ResolveInfo = info
         self.graphql_args: dict = graphql_args
 
@@ -151,16 +150,9 @@ class ModelLoader(dataloader.DataLoader):
             self.parent_model, self.model_relation_field
         )
 
-    def batch_load_fn(self, keys: list[tuple[Any]]) -> Promise:
-        """Load related objects.
-
-        Args:
-            keys: Primary key values of parent model.
-
-        Returns:
-            Lists of related orm objects.
-
-        """
+    def load(self, key: tuple[Any]) -> Any:
+        # Synchronous load for a single key (N+1 regression accepted for Graphene v3 compatibility)
+        keys = [key]
         if len(self.parent_model_pk_fields) == 1:
             left_hand_side = self.parent_model_pk_fields[0]
             right_hand_side = [k[0] for k in keys]
@@ -172,15 +164,16 @@ class ModelLoader(dataloader.DataLoader):
             left_hand_side.in_(right_hand_side)
         )
 
-        objects: dict[tuple[Any], Any] = {
-            self.parent_model_object_to_key(parent_object): getattr(
-                parent_object, self.model_relation_field
-            )
-            for parent_object in query
-        }
-        return Promise.resolve(
-            [objects.get(object_id, []) for object_id in keys]
-        )
+        # Force execution
+        results = query.all()
+        
+        objects: dict[tuple[Any], Any] = {}
+        for parent_object in results:
+             k = self.parent_model_object_to_key(parent_object)
+             val = getattr(parent_object, self.model_relation_field)
+             objects[k] = val
+             
+        return objects.get(key, [])
 
     @staticmethod
     def _get_model_pks(model: SqlaModel) -> tuple[str, ...]:
@@ -228,7 +221,7 @@ class ModelLoader(dataloader.DataLoader):
             FilterSet class from field args.
 
         """
-        field_name = info.field_asts[0].name.value
+        field_name = info.field_nodes[0].name.value
         schema_field = info.parent_type.fields.get(field_name)
         filters_type = schema_field.args[cls.filter_arg].type
         filters: FilterSet = filters_type.graphene_type
@@ -272,10 +265,14 @@ class ModelLoader(dataloader.DataLoader):
         order = []
         if sort:
             for s in sort:
+                val = s.value
+                if isinstance(val, EnumValue):
+                    val = val.value
+
                 ai = inspect(by_model)
-                prop = ai.mapper.get_property_by_column(s.value.element)
+                prop = ai.mapper.get_property_by_column(val.element)
                 col = getattr(by_model, prop.key)
-                order.append(s.value.modifier(col))
+                order.append(val.modifier(col))
 
         return query.order_by(*order)
 
@@ -334,7 +331,7 @@ class NestedFilterableConnectionField(FilterableConnectionField):
         root: Any,
         info: ResolveInfo,
         **kwargs: dict,
-    ) -> Promise | Connection:
+    ) -> Connection:
         """Resolve nested connection.
 
         Args:
@@ -353,12 +350,9 @@ class NestedFilterableConnectionField(FilterableConnectionField):
             root, model, info, kwargs
         )
         root_pk_value: tuple = data_loader.parent_model_object_to_key(root)
-        resolved: Promise = data_loader.load(root_pk_value)
+        resolved = data_loader.load(root_pk_value)
 
-        on_resolve = partial(
-            cls.resolve_connection, connection_type, model, info, kwargs
-        )
-        return Promise.resolve(resolved).then(on_resolve)
+        return cls.resolve_connection(connection_type, model, info, kwargs, resolved)
 
 
 class FilterableFieldFactory:

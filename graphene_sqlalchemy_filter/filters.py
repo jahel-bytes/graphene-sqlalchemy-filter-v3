@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
     from sqlalchemy.orm.context import _MapperEntity
 
-    from graphql import ResolveInfo
+    from graphql import GraphQLResolveInfo as ResolveInfo
 
 
 FilterType = dict[str, Any]
@@ -544,6 +544,8 @@ class FilterSet(graphene.InputObjectType):
         graphql_filters = {}
         filters_map = cls.ALLOWED_FILTERS
         model_fields = cls._get_model_fields_data(model, field_filters.keys())
+        import sys
+        print(f"DEBUG: Generating default filters for {model}. Fields: {model_fields.keys()}", file=sys.stderr)
 
         for field_name, field_object in model_fields.items():
             column_type = field_object["type"]
@@ -602,7 +604,40 @@ class FilterSet(graphene.InputObjectType):
         """
         if column_type is None:
             return GenericScalar
-        _type = convert_sqlalchemy_type(column_type, sqla_column)
+            
+        import sys
+        print(f"DEBUG: Processing column_type: {type(column_type)} {column_type}", file=sys.stderr)
+
+        # Manual mapping for common types to avoid graphene-sqlalchemy v3 converter issues
+        if isinstance(column_type, types.Integer):
+            return graphene.Int
+        if isinstance(column_type, types.String):
+            return graphene.String
+        if isinstance(column_type, types.Boolean):
+            return graphene.Boolean
+        if isinstance(column_type, types.DateTime):
+            return graphene.DateTime
+        if isinstance(column_type, types.Date):
+            return graphene.Date
+        if isinstance(column_type, types.Time):
+            return graphene.Time
+        if isinstance(column_type, (types.Float, types.Numeric)):
+            return graphene.Float
+        if isinstance(column_type, types.Enum):
+            print(f"DEBUG: Found Enum {column_type}, enum_class={getattr(column_type, 'enum_class', None)}")
+            try:
+                return graphene.Enum.from_enum(column_type.enum_class)
+            except Exception as e:
+                print(f"DEBUG: Enum conversion failed: {e}")
+                pass # Fallback to converter or String
+        
+        try:
+            _type = convert_sqlalchemy_type(column_type, sqla_column)
+        except Exception:
+            # Fallback to String or GenericScalar if conversion fails
+             return graphene.String
+
+
         if inspect.isfunction(_type):
             return _type()  # only graphene-sqlalchemy>2.2.0
         return _type

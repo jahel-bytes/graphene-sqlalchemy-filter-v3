@@ -2,10 +2,10 @@ import sqlite3
 
 import pytest
 
-from graphene.types.definitions import GrapheneObjectType
+from graphene.types.definitions import GrapheneObjectType, GrapheneInputObjectType
 from graphene_sqlalchemy.utils import EnumValue
 from graphql import GraphQLArgument, GraphQLField, GraphQLObjectType
-from graphql.language.ast import Field, Name
+from graphql.language.ast import FieldNode as Field, NameNode as Name
 
 from graphene_sqlalchemy_filter.connection_field import (
     FilterableConnectionField,
@@ -27,12 +27,12 @@ from .models import Article, Author, Group, User
 def test_composite_pk(info, session):
     info.path = ["author"]
     info.field_name = "articles"
-    info.field_asts = [Field(name=Name(value="articles"))]
+    info.field_nodes = [Field(name=Name(value="articles"))]
     article_connection_type = GrapheneObjectType(
         graphene_type=ArticleConnection, name="AC", fields={}
     )
     article_filter_argument = GraphQLArgument(
-        GrapheneObjectType(graphene_type=ArticleFilter, name="AF", fields={})
+        GrapheneInputObjectType(graphene_type=ArticleFilter, name="AF", fields={})
     )
     article_connection_field = GraphQLField(
         type_=article_connection_type,
@@ -64,7 +64,7 @@ def test_composite_pk(info, session):
     assert set(ml.parent_model_pks) == {"first_name", "last_name"}
 
     key = ml.parent_model_object_to_key(author)
-    a1, a2 = ml.load(key).get()
+    a1, a2 = ml.load(key)
     assert a1.text == "123"
     assert a2.text == "abc"
 
